@@ -95,6 +95,14 @@ const LoginScreen = () => {
             <Text style={styles.registerText}>Debuging1?</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity onPress={() => navigation.navigate("ReadScreen")}>
+            <Text style={styles.registerText}>Read?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => navigation.navigate("ListenScreen")}>
+            <Text style={styles.registerText}>Listen</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={handleSignOut}>
   <Text style={styles.registerText}>Logout</Text>
 </TouchableOpacity>

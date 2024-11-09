@@ -10,6 +10,8 @@ import { View, Text } from 'react-native';
 import HomeScreen from './app/HomeScreen';
 import LoginScreen from './app/LoginScreen';
 import RegisterScreen from './app/RegisterScreen';
+import ReadScreen from './app/ReadScreen'
+import ListenScreen from './app/ListenScreen'
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createStackNavigator();
@@ -59,6 +61,8 @@ export default function App() {
         <Stack.Screen name="HomeScreen" component={HomeScreen} options={{ headerShown: false }} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ReadScreen" component={ReadScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ListenScreen" component={ListenScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
