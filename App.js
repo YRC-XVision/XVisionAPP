@@ -12,6 +12,7 @@ import LoginScreen from './app/LoginScreen';
 import RegisterScreen from './app/RegisterScreen';
 import ReadScreen from './app/ReadScreen'
 import ListenScreen from './app/ListenScreen'
+import HistoryScreen from './app/HistoryScreen'
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createStackNavigator();
@@ -63,6 +64,7 @@ export default function App() {
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ReadScreen" component={ReadScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ListenScreen" component={ListenScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="HistoryScreen" component={HistoryScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

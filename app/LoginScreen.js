@@ -41,7 +41,7 @@ const LoginScreen = () => {
       const status = await loginWithEmailAndPassword({email:email, password:password});
       if (status === 'successful') {
         Alert.alert("สำเร็จ", "เข้าสู่ระบบสำเร็จ");
-        navigation.navigate('AuthCheck');
+        navigation.navigate('HomeScreen');
       } else {
         Alert.alert("เกิดข้อผิดพลาด", status);
       }
@@ -91,7 +91,7 @@ const LoginScreen = () => {
             <Text style={styles.registerText}>สมัครสมาชิก?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate("HomeScreen")}>
+          {/* <TouchableOpacity onPress={() => navigation.navigate("HomeScreen")}>
             <Text style={styles.registerText}>Debuging1?</Text>
           </TouchableOpacity>
 
@@ -104,8 +104,8 @@ const LoginScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleSignOut}>
-  <Text style={styles.registerText}>Logout</Text>
-</TouchableOpacity>
+            <Text style={styles.registerText}>Logout</Text>
+          </TouchableOpacity> */}
         </View>
       </View>
     </View>
@@ -171,7 +171,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#D26741'
   },
   loginButtonText: {
-
     fontFamily: "KanitMedium",
     fontSize: 20,
     fontWeight: 'bold',

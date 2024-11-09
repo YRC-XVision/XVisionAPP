@@ -1,46 +1,274 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Audio ,RecordingOptionsPresets } from 'expo-av';
-import axios from 'axios';
-import * as FileSystem from 'expo-file-system'; // To read the file as base64
+import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
+import { Audio } from 'expo-av';
 import Icon from 'react-native-vector-icons/Ionicons';
+import axios from 'axios'
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ListenScreen = () => {
   const [recording, setRecording] = useState();
-  const [playing, setPlaying] = useState();
   const [permissionResponse, requestPermission] = Audio.usePermissions();
-  const [sound, setSound] = useState();
-  const [transcribedText, setTranscribedText] = useState('');
+  const [message, setMessage] = useState('ฉันหิวข้าว');
+  const [answer, setAnswer] = useState('');
+  const [messageArray, setMessageArray] = useState([]);
+  const [answerArray, setAnswerArray] = useState([]);
+  const [correctWord, setCorrectWord] = useState(0);
+  const [incorrectWord, setInCorrectWord] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [timer, setTimer] = useState(null);
+  const [gameTimer, setGameTimer] = useState(60);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [isGameStarted, setIsGameStarted] = useState(false);
 
-  Audio.RecordingOptionsPresets.LOW_QUALITY = {
-    isMeteringEnabled: true,
-    android: {
-      extension: '.mp4a',
-      sampleRate: 8000,
-      numberOfChannels: 1,
-      bitRate: 16,
-    },
-    ios: {
-      extension: '.mp4a',
-      sampleRate: 8000,
-      numberOfChannels: 1,
-      bitRate: 16,
-      linearPCMBitDepth: 16,
-      linearPCMIsBigEndian: false,
-      linearPCMIsFloat: false,
-    },
-    web: {
-      mimeType: 'audio/webm',
-      bitsPerSecond: 16,
-    },
-  };
-  
-  // Start recording
-  async function startRecording() {
+  const sentences = [
+    "ฉันหิวข้าว",
+    "ฉันชอบไปเที่ยว",
+    "ปวดหลัง"
+  ];
+
+  // Initialize game and handle random word
+  useEffect(() => {
+    handleRandomWord();
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  // Game timer management
+  useEffect(() => {
+    let intervalId;
+    
+    if (isGameStarted && !isGameOver) {
+      intervalId = setInterval(() => {
+        setGameTimer(prev => {
+          if (prev <= 1) {
+            handleGameOver();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isGameStarted, isGameOver]);
+
+  const listen = async (text) => {
     try {
+      const url = 'https://api-voice.botnoi.ai/openapi/v1/generate_audio';
+      const apiKey = 'M0ZJT1lRQWphRU1QeVpFN1Q0VnZJT05lMUxpMTU2MTg5NA==';
+      
+      const data = {
+        "text": text,
+        "speaker": "1",
+        "volume": 3,
+        "speed": 1,
+        "type_media": "mp3",
+        "save_file": "true",
+      };
+  
+      const options = {
+        method: 'POST',
+        url: url,
+        headers: {
+          'Botnoi-Token': apiKey,
+          'Content-Type': 'application/json',
+        },
+        data: JSON.stringify(data),
+      };
+  
+      const response = await axios(options);
+  
+      if (response.data && response.data.audio_url) {
+        try {
+          const url = response.data.audio_url;
+          await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+          const { sound: playbackObject } = await Audio.Sound.createAsync(
+            { uri: url },
+            { shouldPlay: true }
+          );
+  
+          // Ensure playbackObject is set correctly
+          if (playbackObject) {
+            playbackObject.setOnPlaybackStatusUpdate((status) => {
+              if (status.didJustFinish) {
+                console.log('Playback finished');
+              }
+            });
+          }
+  
+          // Handle stopping the playback if needed
+          return playbackObject;
+  
+        } catch (error) {
+          console.error('Error playing sound:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating audio:', error);
+    }
+  };
+
+  // Save game history to AsyncStorage
+  const saveHistory = async (history) => {
+    try {
+      const existingHistory = await AsyncStorage.getItem('gameHistory');
+      let historyArray = existingHistory ? JSON.parse(existingHistory) : [];
+      historyArray.push(history);
+      await AsyncStorage.setItem('gameHistory', JSON.stringify(historyArray));
+    } catch (error) {
+      console.error('Error saving history:', error);
+    }
+  };
+
+  const handleGameOver = async () => {
+    setIsGameOver(true);
+    setIsGameStarted(false);
+    setIsRecording(false);
+    
+    if (recording) {
+      await stopRecording();
+    }
+
+    const accuracy = calculateAccuracy();
+    const gameHistory = {
+      score: correctWord,
+      incorrect: incorrectWord,
+      accuracy: accuracy,
+    };
+
+    await saveHistory(gameHistory);
+    
+    Alert.alert(
+      "หมดเวลา!",
+      `ผลคะแนนของคุณ:\n\nคำถูก: ${correctWord} คำ\nคำผิด: ${incorrectWord} คำ\nความแม่นยำ: ${calculateAccuracy()}%`,
+      [
+        { 
+          text: "เล่นใหม่", 
+          onPress: () => {
+            startNewGame();
+          }
+        }
+      ]
+    );
+  };
+
+  const calculateAccuracy = () => {
+    const totalAttempts = correctWord + incorrectWord;
+    if (totalAttempts === 0) return 0;
+    return ((correctWord / totalAttempts) * 100).toFixed(1);
+  };
+
+  const startNewGame = () => {
+    setIsGameOver(false);
+    setIsGameStarted(true);
+    setGameTimer(60);
+    setCorrectWord(0);
+    setInCorrectWord(0);
+    setAnswer('');
+    handleRandomWord();
+  };
+
+  const handleRandomWord = () => {
+    const word = getRandomWord(sentences);
+    if (word) {
+      setMessage(word);
+      createQuest(word);
+      setAnswer('');
+      setAnswerArray([]);
+    }
+  };
+
+  const getRandomWord = (array) => {
+    return array.length > 0 ? array[Math.floor(Math.random() * array.length)] : null;
+  };
+
+  const createQuest = async (text) => {
+    try {
+      const apiKey = 'CjahHE39GJTqtmHlxXSPHLYFt7zJihnL';
+      const url = `https://api.aiforthai.in.th/tlexplus?text=${encodeURIComponent(text)}`;
+      
+      const response = await axios.get(url, {
+        headers: {
+          'Apikey': apiKey,
+        },
+      });
+
+      if (response.data && response.data.tokens) {
+        setMessageArray(response.data.tokens);
+      }
+    } catch (error) {
+      console.error('Error creating quest:', error);
+    }
+  };
+
+  const cutAnswer = async (text) => {
+    try {
+      const apiKey = 'CjahHE39GJTqtmHlxXSPHLYFt7zJihnL';
+      const url = `https://api.aiforthai.in.th/tlexplus?text=${encodeURIComponent(text)}`;
+      
+      const response = await axios.get(url, {
+        headers: {
+          'Apikey': apiKey,
+        },
+      });
+
+      if (response.data && response.data.tokens) {
+        setAnswerArray(response.data.tokens);
+        return response.data.tokens;
+      }
+    } catch (error) {
+      console.error('Error cutting answer:', error);
+      return [];
+    }
+  };
+
+  const checkAnswer = async (answerWords) => {
+    if (!messageArray.length || !answerWords.length) {
+      return null;
+    }
+
+    let correctCount = 0;
+    answerWords.forEach(word => {
+      if (messageArray.includes(word)) {
+        correctCount++;
+      }
+    });
+
+    const totalWords = messageArray.length;
+    const newIncorrectWords = totalWords - correctCount;
+
+    setCorrectWord(prev => prev + correctCount);
+    setInCorrectWord(prev => prev + newIncorrectWords);
+
+    if (correctCount > 0) {
+      Alert.alert(
+        "ดีมาก!",
+        `คุณพูดถูก ${correctCount} คำ`,
+        [{ text: "ต่อไป", style: "default" }],
+        { cancelable: true }
+      );
+    }
+
+    return {
+      correctCount,
+      totalWords,
+      accuracy: ((correctCount / totalWords) * 100).toFixed(2)
+    };
+  };
+
+  const startRecording = async () => {
+    try {
+      if (!isGameStarted) {
+        startNewGame();
+      }
+
       if (permissionResponse.status !== 'granted') {
-        console.log('Requesting permission..');
-        await requestPermission();
+        const permission = await requestPermission();
+        if (permission.status !== 'granted') return;
       }
 
       await Audio.setAudioModeAsync({
@@ -48,81 +276,96 @@ const ListenScreen = () => {
         playsInSilentModeIOS: true,
       });
 
-      console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
       setRecording(recording);
-      console.log('Recording started');
-    } catch (err) {
-      console.error('Failed to start recording', err);
-    }
-  }
-
-  // Stop recording and play the sound
-  async function stopRecording() {
-    console.log('Stopping recording..');
-    if (recording) {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-      const uri = recording.getURI();
-      console.log('Recording stopped and stored at', uri);
-      setRecording(undefined);
-
-      // Convert the recorded file to base64 and send to the Speech-to-Text API
-      sendAudioToSTT(uri);
-    }
-  }
-
-  // Convert audio file to base64
-  async function convertAudioToBase64(uri) {
-    try {
-      const file = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      console.log('Audio converted to base64');
-      return file;
-    } catch (error) {
-      console.error('Error converting audio to base64:', error);
-    }
-  }
-
-  // Send audio to Google Speech-to-Text API
-  async function sendAudioToSTT(uri) {
-    try {
-      const apiKey = 'CjahHE39GJTqtmHlxXSPHLYFt7zJihnL'; // Replace with your API Key
-      const url = 'https://api.aiforthai.in.th/partii-webapi';
-  
-      // Read the file content from the URI (this should be an mp4a file)
-      const audioFile = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64, // Read the file as base64 string
-      });
-  
-      // Create a FormData instance
-      const formData = new FormData();
+      setIsRecording(true);
       
-      // Append the file content to FormData as a file
-      formData.append('audio', {
-        uri: uri,
-        name: 'audio.mp4a', // Provide a file name with the appropriate extension
-        type: 'audio/mp4', // Set the appropriate MIME type for mp4a audio
-      });
-  
-      // Make the POST request with FormData
-      const response = await axios.post(url, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data', // Set Content-Type as multipart/form-data
-          'Apikey': apiKey, // API key in header
-        },
-      });
-  
-      // Check if the response contains a transcription
-      // ปริ้นท์ทั้งหมดของ JSON response
-    console.log('Response:', JSON.stringify(response.data, null, 2));
+      const intervalId = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      setTimer(intervalId);
+
     } catch (error) {
-      console.error('Error during speech-to-text API call:', error);
+      console.error('Failed to start recording:', error);
     }
-  }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;  // Ensure recording exists before stopping
+  
+      if (timer) {
+        clearInterval(timer);  // Clear the timer
+        setTimer(null);         // Reset the timer state
+      }
+  
+      setIsRecording(false);
+  
+      // Check if the recording has already been unloaded
+      if (recording._isRecording) {
+        await recording.stopAndUnloadAsync();  // Stop and unload the recording
+      }
+      
+      
+
+      const uri = recording.getURI();  // Get the URI of the recorded audio
+      console.log("uri: " + uri);
+      await sendAudioToSTT(uri);  // Send the audio to the speech-to-text API
+  
+      setRecording(undefined);  // Reset the recording state
+      setRecordingTime(0);      // Reset the recording time
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+    }
+  };
+
+  const sendAudioToSTT = async (uri) => {
+    try {
+      const apiKey = 'CjahHE39GJTqtmHlxXSPHLYFt7zJihnL';
+      const url = 'https://api.aiforthai.in.th/partii-webapi';
+
+      // const formData = new FormData();
+      // formData.append('wavfile', {
+      //   uri: uri,
+      // });
+
+      const response = await axios.post(url, {
+        wavfile: uri,
+      }, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Apikey': apiKey
+        }
+      }
+    )
+
+    console.log(response.data)
+
+      if (response.data && response.data.message) {
+        const results = response.data.message.map(item => item.result);
+        const resultText = results.join('').replace(/\s+/g, '');
+        setAnswer(resultText);
+
+        const answerWords = await cutAnswer(resultText);
+        if (answerWords.length) {
+          const result = await checkAnswer(answerWords);
+          handleRandomWord();
+        }
+      }
+
+    } catch (error) {
+      console.error('Error in speech-to-text:', error);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <View style={styles.container}>
@@ -137,15 +380,19 @@ const ListenScreen = () => {
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.scoreText}>คะแนน : <Text style={{color: '#D26741', fontFamily: "KanitMedium", }}>88</Text></Text>
+          <Text style={styles.scoreText}>
+            คะแนน: <Text style={{color: '#D26741', fontFamily: "KanitMedium"}}>{correctWord}</Text>
+            {' '}เวลา: <Text style={{color: '#D26741', fontFamily: "KanitMedium"}}>{gameTimer}</Text>
+          </Text>
 
           <View style={styles.speechContainer}>
             <Image source={require('../assets/character/man/man4.png')} style={styles.characterImage} />
-            <View style={styles.textBox}>
-              <Icon name="play" size={40} style={styles.iconcog} color="#000" />
-              <Text style={styles.textBoxText}>กดเพื่อฟัง</Text>
-            </View>
-
+            <TouchableOpacity onPress={() => listen(message)}>
+              <View style={styles.textBox}>
+                <Icon name="play" size={40} style={styles.iconcog} color="#000" />
+                <Text style={styles.textBoxText}>กดเพื่อฟัง</Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.buttonRow}>
@@ -153,32 +400,24 @@ const ListenScreen = () => {
               style={styles.recordButton}
               onPress={recording ? stopRecording : startRecording}
             >
-              <Text style={styles.recordButtonText}>{recording ? 'หยุดพูด' : 'เริ่มพูด'}</Text>
-
-              
+              <Text style={styles.recordButtonText}>
+                {recording ? 'หยุดพูด' : 'เริ่มพูด'}
+              </Text>
             </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.stopButton} onPress={stopRecording}>
-              <Text style={styles.stopButtonText}>หยุดพูด</Text>
-            </TouchableOpacity> */}
-
-          <Image source={require('../assets/character/man/man2.png')} style={styles.characterImage} />
-
+            <Image source={require('../assets/character/man/man2.png')} style={styles.characterImage} />
           </View>
 
-          
-
           <View style={styles.outputContainer}>
-            <Text style={styles.timeText}>ระยะเวลา : 10 วินาที</Text>
-            <Text style={styles.outputText}>{transcribedText}jfhgzdxjfhb;zdjfngb;ldjzsbn;zjdxcfbn;sldxjfgbnzl;dfxgn;ALSKJfvnzjdfnhbgzxjdcfnhb.kxlzdjfn</Text>
+            <Text style={styles.timeText}>ระยะเวลา: {recordingTime} วินาที</Text>
+            <Text style={styles.outputText}>{answer}</Text>
           </View>
 
           <View style={styles.checkContainer}>
             <View style={styles.correctButton}>
-              <Text style={styles.checkText}>พูดถูก 8 (คำ)</Text>
+              <Text style={styles.checkText}>พูดถูก {correctWord} (คำ)</Text>
             </View>
-
             <View style={styles.incorrectButton}>
-              <Text style={styles.checkText2}>พูดผิด 2 (คำ)</Text>
+              <Text style={styles.checkText2}>พูดผิด {incorrectWord} (คำ)</Text>
             </View>
           </View>
         </View>
