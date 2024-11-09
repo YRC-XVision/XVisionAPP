@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "MyPlants",
+    "slug": "MyPlants",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/SplashScreen.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/CircleIcon.png",
+        "backgroundColor": "#fff"
+      },
+      "package": "com.yupparaj.MyPlants"
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Kanit-Medium.ttf"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "16e701a0-d4d2-42f0-90ab-8a8ff5c8f0d1"
+      }
+    }
+  }
+}
